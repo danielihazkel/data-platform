@@ -12,7 +12,7 @@ const SplitView: React.FC<SplitViewProps> = ({ list, detail, showDetail, onClose
     <div className={`flex flex-col lg:flex-row h-[calc(100vh-140px)] min-h-[600px] transition-all duration-300 ${showDetail ? 'gap-6' : 'gap-0'}`}>
       {/* List Panel */}
       <div className={`flex flex-col transition-all duration-300 h-full ${showDetail ? 'lg:w-7/12 xl:w-8/12 hidden lg:flex' : 'w-full flex'}`}>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col h-full overflow-hidden transition-colors duration-200">
           {list}
         </div>
       </div>
@@ -28,9 +28,9 @@ const SplitView: React.FC<SplitViewProps> = ({ list, detail, showDetail, onClose
         }}
       >
         <div className={`
-          w-full h-full lg:h-full bg-white lg:rounded-xl shadow-xl lg:shadow-sm flex flex-col 
-          animate-slideInRight lg:animate-none ml-auto lg:ml-0 max-w-lg lg:max-w-none
-          ${showDetail ? 'border border-slate-200' : 'border-none'}
+          w-full h-full lg:h-full bg-white dark:bg-slate-800 lg:rounded-xl shadow-xl lg:shadow-sm flex flex-col 
+          animate-slideInRight lg:animate-none ml-auto lg:ml-0 max-w-lg lg:max-w-none transition-colors duration-200
+          ${showDetail ? 'border border-slate-200 dark:border-slate-700' : 'border-none'}
         `}>
           {detail}
         </div>
