@@ -1,7 +1,8 @@
 import { APP_CONFIG } from '../constants';
 import { 
   mockQueries, mockSchedules, mockDistributions, 
-  mockSystems, mockGroups, mockTypes, mockDatabases 
+  mockSystems, mockGroups, mockTypes, mockDatabases,
+  mockQueryResults
 } from './mockData';
 import { 
   DistributionCollectorQuery, 
@@ -9,7 +10,8 @@ import {
   DistributionDistributerDistribution,
   DistributionCollectorSystem,
   DistributionSchedulerGroup,
-  DistributionDistributerType
+  DistributionDistributerType,
+  QueryTestResult
 } from '../types';
 
 // Helper to simulate network delay
@@ -47,6 +49,45 @@ class ApiService {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(query)
+    });
+    return res.json();
+  }
+
+  async testQuery(query: Partial<DistributionCollectorQuery>): Promise<QueryTestResult> {
+    if (APP_CONFIG.USE_MOCK_API) {
+        await delay(800);
+        
+        // Simulate error if SQL contains "error"
+        if (query.dataQuery?.toLowerCase().includes('error')) {
+            return {
+                success: false,
+                error: 'ORA-00904: "INVALID_COLUMN": invalid identifier',
+                executionTimeMs: 45
+            };
+        }
+
+        // Mock success response using mock data
+        let cols: string[] = [];
+        
+        if (query.dataColumns && query.dataColumns.trim().length > 0) {
+            cols = query.dataColumns.split(',').map(s => s.trim());
+        } else {
+            // Default to keys from first mock result
+            cols = Object.keys(mockQueryResults[0]);
+        }
+
+        return {
+            success: true,
+            columns: cols,
+            rows: mockQueryResults,
+            executionTimeMs: 120
+        };
+    }
+
+    const res = await fetch(`${APP_CONFIG.API_BASE_URL}/queries/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query)
     });
     return res.json();
   }
@@ -123,16 +164,64 @@ class ApiService {
     await fetch(`${APP_CONFIG.API_BASE_URL}/distributions/${id}/deactivate`, { method: 'PATCH' });
   }
 
-  // --- Aux Data ---
+  // --- Aux Data / Configuration Data ---
   async getSystems(): Promise<DistributionCollectorSystem[]> {
-    if (APP_CONFIG.USE_MOCK_API) return mockSystems;
+    if (APP_CONFIG.USE_MOCK_API) {
+        await delay(200);
+        return [...mockSystems];
+    }
     const res = await fetch(`${APP_CONFIG.API_BASE_URL}/systems`);
     return res.json();
   }
 
+  async saveSystem(system: DistributionCollectorSystem): Promise<DistributionCollectorSystem> {
+    if (APP_CONFIG.USE_MOCK_API) {
+      await delay(300);
+      const index = mockSystems.findIndex(s => s.id === system.id);
+      if (index >= 0) {
+        mockSystems[index] = system;
+      } else {
+        mockSystems.push({ ...system, createTs: new Date().toISOString() });
+      }
+      return system;
+    }
+    const method = system.createTs ? 'PUT' : 'POST';
+    const url = system.createTs ? `${APP_CONFIG.API_BASE_URL}/systems/${system.id}` : `${APP_CONFIG.API_BASE_URL}/systems`;
+    const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(system)
+    });
+    return res.json();
+  }
+
   async getGroups(): Promise<DistributionSchedulerGroup[]> {
-    if (APP_CONFIG.USE_MOCK_API) return mockGroups;
+    if (APP_CONFIG.USE_MOCK_API) {
+        await delay(200);
+        return [...mockGroups];
+    }
     const res = await fetch(`${APP_CONFIG.API_BASE_URL}/groups`);
+    return res.json();
+  }
+
+  async saveGroup(group: DistributionSchedulerGroup): Promise<DistributionSchedulerGroup> {
+    if (APP_CONFIG.USE_MOCK_API) {
+      await delay(300);
+      const index = mockGroups.findIndex(g => g.id === group.id);
+      if (index >= 0) {
+        mockGroups[index] = group;
+      } else {
+        mockGroups.push({ ...group, createTs: new Date().toISOString() });
+      }
+      return group;
+    }
+    const method = group.createTs ? 'PUT' : 'POST';
+    const url = group.createTs ? `${APP_CONFIG.API_BASE_URL}/groups/${group.id}` : `${APP_CONFIG.API_BASE_URL}/groups`;
+    const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(group)
+    });
     return res.json();
   }
 
