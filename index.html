@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
@@ -23,11 +24,21 @@
                     },
                     animation: {
                         slideInRight: 'slideInRight 0.3s ease-out',
+                        fadeIn: 'fadeIn 0.2s ease-out',
+                        scaleIn: 'scaleIn 0.2s ease-out',
                     },
                     keyframes: {
                         slideInRight: {
                             '0%': { transform: 'translateX(-100%)', opacity: '0' },
                             '100%': { transform: 'translateX(0)', opacity: '1' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.95)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
                         }
                     }
                 }
@@ -43,12 +54,21 @@
         ::-webkit-scrollbar-track {
             background: #f1f5f9;
         }
+        .dark ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
         ::-webkit-scrollbar-thumb {
             background: #cbd5e1;
             border-radius: 4px;
         }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
+        }
+        body {
+            @apply transition-colors duration-200;
         }
     </style>
   <script type="importmap">
@@ -64,10 +84,8 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-50 text-slate-800 antialiased">
+  <body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 antialiased">
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+  </body>
 </html>
