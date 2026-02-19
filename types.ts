@@ -1,9 +1,11 @@
+
 export interface DistributionCollectorSystem {
   id: string;
   name: string;
   department?: number;
   userManager?: string;
   lineOfBusiness?: number;
+  createTs?: string;
 }
 
 export interface DistributionCollectorQuery {
@@ -23,6 +25,10 @@ export interface DistributionCollectorQuery {
 export interface DistributionSchedulerGroup {
   id: string;
   name: string;
+  department?: number;
+  userManager?: string;
+  lineOfBusiness?: number;
+  createTs?: string;
 }
 
 export interface DistributionSchedulerSchedule {
@@ -50,6 +56,14 @@ export interface DistributionDistributerDistribution {
   parameters?: string;
   isActive: number;
   createTs?: string;
+}
+
+export interface QueryTestResult {
+  success: boolean;
+  columns?: string[];
+  rows?: any[];
+  error?: string;
+  executionTimeMs?: number;
 }
 
 // Helper types for UI
