@@ -1,282 +1,375 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, X, Search, Server, Users, Edit2, Save, Loader2 } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Plus, Search, Save, X, Trash2, Share2, Database, CalendarClock, ArrowRight } from 'lucide-react';
 import { apiService } from '../services/api';
-import { DistributionCollectorSystem, DistributionSchedulerGroup } from '../types';
+import { DistributionDistributerDistribution, DistributionDistributerType, DistributionSchedulerSchedule, DistributionCollectorQuery } from '../types';
+import SplitView from '../components/ui/SplitView';
+import { StatusBadge } from '../components/ui/Badge';
 
-type Tab = 'systems' | 'groups';
+const DistributionsView: React.FC = () => {
+  const [distributions, setDistributions] = useState<DistributionDistributerDistribution[]>([]);
+  const [types, setTypes] = useState<DistributionDistributerType[]>([]);
+  const [schedules, setSchedules] = useState<DistributionSchedulerSchedule[]>([]);
+  // Dependency Data
+  const [queries, setQueries] = useState<DistributionCollectorQuery[]>([]);
 
-const SettingsView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('systems');
-  const [systems, setSystems] = useState<DistributionCollectorSystem[]>([]);
-  const [groups, setGroups] = useState<DistributionSchedulerGroup[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSystem, setEditingSystem] = useState<Partial<DistributionCollectorSystem> | null>(null);
-  const [editingGroup, setEditingGroup] = useState<Partial<DistributionSchedulerGroup> | null>(null);
+  
+  const [selectedDist, setSelectedDist] = useState<Partial<DistributionDistributerDistribution> | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'context'>('general');
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    setLoading(true);
-    try {
-      const [sData, gData] = await Promise.all([
-        apiService.getSystems(),
-        apiService.getGroups()
-      ]);
-      setSystems(sData);
-      setGroups(gData);
-    } finally {
-      setLoading(false);
-    }
+    const [dData, tData, sData, qData] = await Promise.all([
+      apiService.getDistributions(),
+      apiService.getDistributionTypes(),
+      apiService.getSchedules(),
+      apiService.getQueries()
+    ]);
+    setDistributions(dData);
+    setTypes(tData);
+    setSchedules(sData);
+    setQueries(qData);
   };
 
-  const filteredItems = activeTab === 'systems' 
-    ? systems.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.toLowerCase().includes(searchTerm.toLowerCase()))
-    : groups.filter(g => g.name.toLowerCase().includes(searchTerm.toLowerCase()) || g.id.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return distributions.filter(d => 
+      d.id.toLowerCase().includes(term) ||
+      d.scheduleId.toLowerCase().includes(term) ||
+      d.distributionType?.name.toLowerCase().includes(term)
+    );
+  }, [distributions, searchTerm]);
+
+  const getContext = (distScheduleId?: string) => {
+      if (!distScheduleId) return { schedule: null, query: null };
+      const schedule = schedules.find(s => s.id === distScheduleId);
+      const query = schedule ? queries.find(q => q.id === schedule.queryId) : null;
+      return { schedule, query };
+  };
 
   const handleNew = () => {
-    if (activeTab === 'systems') {
-      setEditingSystem({ id: '', name: '', department: 0, userManager: '', lineOfBusiness: 0 });
-      setEditingGroup(null);
-    } else {
-      setEditingGroup({ id: '', name: '', department: 0, userManager: '', lineOfBusiness: 0 });
-      setEditingSystem(null);
-    }
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (item: any) => {
-    if (activeTab === 'systems') {
-      setEditingSystem({ ...item });
-      setEditingGroup(null);
-    } else {
-      setEditingGroup({ ...item });
-      setEditingSystem(null);
-    }
-    setIsModalOpen(true);
+    setSelectedDist({
+      id: '',
+      scheduleId: '',
+      parameters: '',
+      isActive: 1
+    });
+    setIsEditing(true);
+    setActiveTab('general');
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedDist?.id || !selectedDist?.distributionType || !selectedDist?.scheduleId) {
+        alert("נא למלא שדות חובה");
+        return;
+    }
     try {
-        if (activeTab === 'systems' && editingSystem) {
-            await apiService.saveSystem(editingSystem as DistributionCollectorSystem);
-        } else if (activeTab === 'groups' && editingGroup) {
-            await apiService.saveGroup(editingGroup as DistributionSchedulerGroup);
-        }
+        await apiService.saveDistribution(selectedDist as DistributionDistributerDistribution);
         await loadData();
-        setIsModalOpen(false);
-    } catch (err) {
+        setIsEditing(false);
+        setSelectedDist(null);
+    } catch (e) {
         alert("שגיאה בשמירה");
     }
   };
 
-  return (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-800">הגדרות וניהול משאבים</h1>
-      </div>
+  const handleDeactivate = async () => {
+      if(!selectedDist?.id) return;
+      if (confirm("האם אתה בטוח שברצונך להשבית הפצה זו?")) {
+        await apiService.deactivateDistribution(selectedDist.id);
+        await loadData();
+        setSelectedDist({...selectedDist, isActive: 0});
+      }
+  };
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
-        {/* Tabs Header */}
-        <div className="flex border-b border-slate-200">
-          <button
-            onClick={() => setActiveTab('systems')}
-            className={`px-8 py-4 text-sm font-semibold flex items-center gap-2 transition-colors relative ${
-              activeTab === 'systems' 
-                ? 'text-[#664FE1] bg-indigo-50/50' 
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Server size={18} />
-            מערכות (Systems)
-            {activeTab === 'systems' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1]"></div>}
-          </button>
-          <button
-            onClick={() => setActiveTab('groups')}
-            className={`px-8 py-4 text-sm font-semibold flex items-center gap-2 transition-colors relative ${
-              activeTab === 'groups' 
-                ? 'text-[#664FE1] bg-indigo-50/50' 
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Users size={18} />
-            קבוצות תזמון (Groups)
-            {activeTab === 'groups' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1]"></div>}
-          </button>
-        </div>
+  const renderContextTab = () => {
+      const { schedule, query } = getContext(selectedDist?.scheduleId);
 
-        {/* Toolbar */}
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-            <div className="relative w-64">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input
-                    type="text"
-                    placeholder="חיפוש..."
-                    className="w-full pl-4 pr-10 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#664FE1] focus:border-transparent"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
-            <button 
-                onClick={handleNew}
-                className="bg-[#664FE1] hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-sm transition-all"
-            >
-                <Plus size={16} />
-                {activeTab === 'systems' ? 'מערכת חדשה' : 'קבוצה חדשה'}
-            </button>
-        </div>
+      if (!schedule) return <div className="text-center text-slate-400 p-8">לא נמצא תזמון משוייך</div>;
 
-        {/* Data Table */}
-        <div className="flex-1 overflow-auto">
-            {loading ? (
-                <div className="flex justify-center items-center h-64 text-slate-400">
-                    <Loader2 className="animate-spin" size={32} />
-                </div>
-            ) : (
-                <table className="w-full text-right text-sm">
-                    <thead className="bg-slate-50 text-slate-600 font-semibold sticky top-0">
-                        <tr>
-                            <th className="px-6 py-3 border-b border-slate-200">מזהה</th>
-                            <th className="px-6 py-3 border-b border-slate-200">שם</th>
-                            <th className="px-6 py-3 border-b border-slate-200">אחראי (User Manager)</th>
-                            <th className="px-6 py-3 border-b border-slate-200">מחלקה</th>
-                            <th className="px-6 py-3 border-b border-slate-200">LOB</th>
-                            <th className="px-6 py-3 border-b border-slate-200 w-20"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {filteredItems.map((item: any) => (
-                            <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
-                                <td className="px-6 py-3 font-mono text-slate-500">{item.id}</td>
-                                <td className="px-6 py-3 font-medium text-slate-800">{item.name}</td>
-                                <td className="px-6 py-3 text-slate-600">{item.userManager || '-'}</td>
-                                <td className="px-6 py-3 text-slate-600">{item.department || '-'}</td>
-                                <td className="px-6 py-3 text-slate-600">{item.lineOfBusiness || '-'}</td>
-                                <td className="px-6 py-3 text-left">
-                                    <button 
-                                        onClick={() => handleEdit(item)}
-                                        className="p-2 text-slate-400 hover:text-[#664FE1] hover:bg-indigo-50 rounded-full transition-all"
-                                    >
-                                        <Edit2 size={16} />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                         {filteredItems.length === 0 && (
-                             <tr>
-                                 <td colSpan={6} className="text-center py-12 text-slate-400">לא נמצאו רשומות</td>
-                             </tr>
-                         )}
-                    </tbody>
-                </table>
-            )}
-        </div>
-      </div>
-
-      {/* Create/Edit Modal */}
-      {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fadeIn">
-              <div className="bg-white w-full max-w-md rounded-xl shadow-2xl flex flex-col animate-scaleIn">
-                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
-                      <h3 className="font-bold text-slate-800">
-                          {activeTab === 'systems' 
-                            ? (editingSystem?.createTs ? 'עריכת מערכת' : 'מערכת חדשה') 
-                            : (editingGroup?.createTs ? 'עריכת קבוצה' : 'קבוצה חדשה')}
-                      </h3>
-                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                          <X size={20} />
-                      </button>
+      return (
+          <div className="space-y-8 animate-fadeIn">
+              
+              {/* Timeline / Chain Visual */}
+              <div className="flex flex-col items-center gap-2 text-slate-400 text-sm mb-6">
+                  <div className="flex items-center gap-3 w-full p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-900">
+                      <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-full text-indigo-600 dark:text-indigo-300"><Database size={16}/></div>
+                      <div className="flex-1">
+                          <span className="text-xs text-indigo-400 block uppercase tracking-wider font-bold">שאילתה</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{query?.name || 'לא ידוע'}</span>
+                      </div>
                   </div>
                   
-                  <form onSubmit={handleSave} className="p-6 space-y-4">
-                      {/* Shared Fields Logic since System and Group structures are identical here */}
-                      {(() => {
-                          const target = activeTab === 'systems' ? editingSystem : editingGroup;
-                          const setTarget = activeTab === 'systems' ? setEditingSystem : setEditingGroup;
-                          
-                          if (!target) return null;
+                  <ArrowRight className="rotate-90 text-slate-300 dark:text-slate-600" size={20} />
 
-                          return (
-                            <>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-slate-500">מזהה</label>
-                                    <input
-                                        required
-                                        className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        value={target.id || ''}
-                                        onChange={(e) => setTarget({ ...target, id: e.target.value } as any)}
-                                        disabled={!!target.createTs}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-slate-500">שם</label>
-                                    <input
-                                        required
-                                        className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        value={target.name || ''}
-                                        onChange={(e) => setTarget({ ...target, name: e.target.value } as any)}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-semibold text-slate-500">אחראי (User Manager)</label>
-                                    <input
-                                        className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        value={target.userManager || ''}
-                                        onChange={(e) => setTarget({ ...target, userManager: e.target.value } as any)}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-semibold text-slate-500">מחלקה</label>
-                                        <input
-                                            type="number"
-                                            className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
-                                            value={target.department || ''}
-                                            onChange={(e) => setTarget({ ...target, department: parseInt(e.target.value) || 0 } as any)}
-                                        />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-xs font-semibold text-slate-500">LOB</label>
-                                        <input
-                                            type="number"
-                                            className="w-full p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
-                                            value={target.lineOfBusiness || ''}
-                                            onChange={(e) => setTarget({ ...target, lineOfBusiness: parseInt(e.target.value) || 0 } as any)}
-                                        />
-                                    </div>
-                                </div>
-                            </>
-                          );
-                      })()}
-                      
-                      <div className="pt-4 flex justify-end gap-3">
-                          <button
-                              type="button"
-                              onClick={() => setIsModalOpen(false)}
-                              className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm"
-                          >
-                              ביטול
-                          </button>
-                          <button
-                              type="submit"
-                              className="bg-[#664FE1] hover:bg-indigo-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-all text-sm"
-                          >
-                              <Save size={16} />
-                              שמירה
-                          </button>
+                  <div className="flex items-center gap-3 w-full p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100 dark:border-emerald-900">
+                      <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2 rounded-full text-emerald-600 dark:text-emerald-300"><CalendarClock size={16}/></div>
+                      <div className="flex-1">
+                          <span className="text-xs text-emerald-500 block uppercase tracking-wider font-bold">תזמון</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{schedule.name}</span>
                       </div>
-                  </form>
+                  </div>
+
+                  <ArrowRight className="rotate-90 text-slate-300 dark:text-slate-600" size={20} />
+
+                  <div className="flex items-center gap-3 w-full p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-900">
+                      <div className="bg-amber-100 dark:bg-amber-900/50 p-2 rounded-full text-amber-600 dark:text-amber-300"><Share2 size={16}/></div>
+                      <div className="flex-1">
+                          <span className="text-xs text-amber-500 block uppercase tracking-wider font-bold">הפצה נוכחית</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedDist?.distributionType?.name}</span>
+                      </div>
+                  </div>
+              </div>
+
+              {/* Detail Cards */}
+              <div className="grid gap-4">
+                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 shadow-sm">
+                      <h4 className="font-bold text-slate-800 dark:text-white mb-2 border-b border-slate-100 dark:border-slate-700 pb-2">פרטי תזמון המקור</h4>
+                      <div className="space-y-2 text-sm">
+                          <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">מזהה:</span> <span className="font-mono text-slate-700 dark:text-slate-200">{schedule.id}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Cron:</span> <span className="font-mono bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-1 rounded">{schedule.cron}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">קבוצה:</span> <span className="text-slate-700 dark:text-slate-200">{schedule.group?.name}</span></div>
+                      </div>
+                  </div>
+
+                   {query && (
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 shadow-sm">
+                        <h4 className="font-bold text-slate-800 dark:text-white mb-2 border-b border-slate-100 dark:border-slate-700 pb-2">פרטי שאילתת המקור</h4>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">מזהה:</span> <span className="font-mono text-slate-700 dark:text-slate-200">{query.id}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">מקור מידע:</span> <span className="text-slate-700 dark:text-slate-200">{query.dataSource}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">מערכת:</span> <span className="text-slate-700 dark:text-slate-200">{query.system?.name}</span></div>
+                        </div>
+                    </div>
+                   )}
               </div>
           </div>
-      )}
+      );
+  };
+
+  return (
+    <div className="h-full flex flex-col space-y-4">
+      <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-200">
+        <div className="relative w-72">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input
+            type="text"
+            placeholder="חיפוש לפי מזהה, סוג..."
+            className="w-full pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#664FE1] focus:border-transparent text-slate-800 dark:text-slate-100 transition-all"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <button 
+          onClick={handleNew}
+          className="bg-[#664FE1] hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-all active:scale-95"
+        >
+          <Plus size={18} />
+          הפצה חדשה
+        </button>
+      </div>
+
+      <SplitView
+        showDetail={isEditing}
+        onCloseDetail={() => setIsEditing(false)}
+        list={
+          <div className="overflow-auto flex-1">
+            <table className="w-full text-right text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
+                <tr>
+                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">מזהה</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סוג</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">תזמון משוייך</th>
+                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סטטוס</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                {filtered.map((item) => (
+                  <tr 
+                    key={item.id} 
+                    onClick={() => { 
+                        setSelectedDist({...item}); 
+                        setIsEditing(true); 
+                        setActiveTab('general');
+                    }}
+                    className={`cursor-pointer transition-colors ${selectedDist?.id === item.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                  >
+                    <td className="px-6 py-4 font-mono text-slate-500 dark:text-slate-400">{item.id}</td>
+                    <td className="px-6 py-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                        <Share2 size={14} className="text-slate-400"/>
+                        {item.distributionType?.name}
+                    </td>
+                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono text-xs">{item.scheduleId}</td>
+                    <td className="px-6 py-4">
+                      <StatusBadge isActive={item.isActive} />
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr><td colSpan={4} className="text-center py-12 text-slate-400">לא נמצאו תוצאות</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        }
+        detail={
+          selectedDist && (
+            <div className="flex flex-col h-full">
+              <div className="p-6 pb-0 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold text-slate-800 dark:text-white">
+                    {selectedDist.createTs ? 'עריכת הפצה' : 'הפצה חדשה'}
+                    </h2>
+                    <button onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <X size={20} />
+                    </button>
+                </div>
+                
+                 {/* Tabs */}
+                 <div className="flex gap-6">
+                    <button 
+                        onClick={() => setActiveTab('general')}
+                        className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'general' ? 'text-[#664FE1] dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    >
+                        פרטים כלליים
+                        {activeTab === 'general' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1] dark:bg-indigo-400 rounded-t-full"></div>}
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('context')}
+                        className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'context' ? 'text-[#664FE1] dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    >
+                        מקור מידע
+                        {activeTab === 'context' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1] dark:bg-indigo-400 rounded-t-full"></div>}
+                    </button>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6">
+                {activeTab === 'general' ? (
+                     <form id="dist-form" onSubmit={handleSave} className="space-y-6 animate-fadeIn">
+                        <div className="space-y-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">מזהה</label>
+                            <input
+                                required
+                                className="w-full p-2 border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 disabled:opacity-50"
+                                value={selectedDist.id || ''}
+                                onChange={e => setSelectedDist({...selectedDist, id: e.target.value})}
+                                disabled={!!selectedDist.createTs}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">סוג הפצה</label>
+                            <select
+                                required
+                                className="w-full p-2 border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                                value={selectedDist.distributionType?.id || ''}
+                                onChange={e => {
+                                    const type = types.find(t => t.id === e.target.value);
+                                    setSelectedDist({...selectedDist, distributionType: type});
+                                }}
+                            >
+                                <option value="">בחר סוג...</option>
+                                {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                            </div>
+                            <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">תזמון</label>
+                            <select
+                                required
+                                className="w-full p-2 border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                                value={selectedDist.scheduleId || ''}
+                                onChange={e => setSelectedDist({...selectedDist, scheduleId: e.target.value})}
+                            >
+                                <option value="">בחר תזמון...</option>
+                                {schedules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">פרמטרים (JSON)</label>
+                            <textarea
+                            required
+                            dir="ltr"
+                            rows={6}
+                            className="w-full p-2 font-mono text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            value={selectedDist.parameters || ''}
+                            onChange={e => setSelectedDist({...selectedDist, parameters: e.target.value})}
+                            placeholder='{"key": "value"}'
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">סטטוס</label>
+                            <select
+                            className="w-full p-2 border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            value={selectedDist.isActive}
+                            onChange={e => setSelectedDist({...selectedDist, isActive: parseInt(e.target.value)})}
+                            >
+                            <option value={1}>פעיל</option>
+                            <option value={0}>לא פעיל</option>
+                            </select>
+                        </div>
+                        </div>
+                     </form>
+                ) : (
+                    renderContextTab()
+                )}
+              </div>
+
+               {activeTab === 'general' ? (
+                  <div className="pt-4 p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-white dark:bg-slate-800 sticky bottom-0">
+                    {selectedDist.isActive === 1 && selectedDist.createTs && (
+                        <button
+                            type="button"
+                            onClick={handleDeactivate}
+                            className="px-4 py-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors flex items-center gap-2 mr-auto"
+                        >
+                            <Trash2 size={16}/>
+                            השבת
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                        ביטול
+                    </button>
+                    <button
+                        type="submit"
+                        form="dist-form"
+                        className="bg-[#664FE1] hover:bg-indigo-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-all"
+                    >
+                        <Save size={18} />
+                        שמירה
+                    </button>
+                </div>
+               ) : (
+                   <div className="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end bg-white dark:bg-slate-800">
+                     <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="px-6 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                    >
+                        סגור
+                    </button>
+                  </div>
+               )}
+            </div>
+          )
+        }
+      />
     </div>
   );
 };
 
-export default SettingsView;
+export default DistributionsView;
