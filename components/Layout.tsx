@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Database, CalendarClock, Share2, Activity, Menu } from 'lucide-react';
+import { Database, CalendarClock, Share2, Activity, Menu, Settings } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,6 +14,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/queries', label: 'שאילתות', icon: Database },
     { to: '/schedules', label: 'תזמונים', icon: CalendarClock },
     { to: '/distributions', label: 'הפצות', icon: Share2 },
+    { to: '/settings', label: 'הגדרות', icon: Settings },
   ];
 
   return (
