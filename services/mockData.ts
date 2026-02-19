@@ -8,15 +8,15 @@ import {
 } from '../types';
 
 export const mockSystems: DistributionCollectorSystem[] = [
-  { id: 'SYS001', name: 'CRM Core', department: 101, userManager: 'David Cohen' },
-  { id: 'SYS002', name: 'Legacy Billing', department: 102, userManager: 'Sarah Levy' },
-  { id: 'SYS003', name: 'Data Warehouse', department: 103, userManager: 'Moshe Katz' },
+  { id: 'SYS001', name: 'CRM Core', department: 101, userManager: 'David Cohen', lineOfBusiness: 1, createTs: '2023-01-01T10:00:00Z' },
+  { id: 'SYS002', name: 'Legacy Billing', department: 102, userManager: 'Sarah Levy', lineOfBusiness: 1, createTs: '2023-01-15T10:00:00Z' },
+  { id: 'SYS003', name: 'Data Warehouse', department: 103, userManager: 'Moshe Katz', lineOfBusiness: 2, createTs: '2023-02-01T10:00:00Z' },
 ];
 
 export const mockGroups: DistributionSchedulerGroup[] = [
-  { id: 'GRP001', name: 'Daily Reports' },
-  { id: 'GRP002', name: 'Monthly Audits' },
-  { id: 'GRP003', name: 'Critical Alerts' },
+  { id: 'GRP001', name: 'Daily Reports', department: 101, userManager: 'David Cohen', lineOfBusiness: 1, createTs: '2023-01-05T12:00:00Z' },
+  { id: 'GRP002', name: 'Monthly Audits', department: 102, userManager: 'Sarah Levy', lineOfBusiness: 1, createTs: '2023-01-20T12:00:00Z' },
+  { id: 'GRP003', name: 'Critical Alerts', department: 103, userManager: 'Moshe Katz', lineOfBusiness: 2, createTs: '2023-02-10T12:00:00Z' },
 ];
 
 export const mockTypes: DistributionDistributerType[] = [
@@ -96,4 +96,12 @@ export const mockDistributions: DistributionDistributerDistribution[] = [
     isActive: 1,
     createTs: new Date().toISOString()
   }
+];
+
+export const mockQueryResults = [
+  { id: 'RES-001', name: 'Israel Israeli', email: 'israel@example.com', amount: 500.00, status: 'Active', created_at: '2023-10-01', last_login: '2023-10-01 10:00:00' },
+  { id: 'RES-002', name: 'Moshe Cohen', email: 'moshe@example.com', amount: 1250.50, status: 'Pending', created_at: '2023-10-02', last_login: '2023-10-02 11:30:00' },
+  { id: 'RES-003', name: 'Dana Levi', email: 'dana@example.com', amount: 750.00, status: 'Active', created_at: '2023-10-03', last_login: '2023-10-03 09:15:00' },
+  { id: 'RES-004', name: 'Rina Katz', email: 'rina@example.com', amount: 2000.00, status: 'Closed', created_at: '2023-10-04', last_login: '2023-10-04 14:20:00' },
+  { id: 'RES-005', name: 'Yossi Schwartz', email: 'yossi@example.com', amount: 100.00, status: 'Active', created_at: '2023-10-05', last_login: '2023-10-05 16:45:00' },
 ];
