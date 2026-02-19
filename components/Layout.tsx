@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Database, CalendarClock, Share2, Activity, Menu, Settings } from 'lucide-react';
+import { Database, CalendarClock, Share2, Activity, Menu, Settings, Moon, Sun } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,6 +8,23 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem('theme') === 'dark' ||
+        (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (isDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+    }
+  }, [isDark]);
 
   const navItems = [
     { to: '/', label: 'דשבורד', icon: Activity },
@@ -18,9 +35,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans" dir="rtl">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col font-sans transition-colors duration-200" dir="rtl">
       {/* Header */}
-      <header className="bg-[#664FE1] text-white shadow-lg sticky top-0 z-50">
+      <header className="bg-[#664FE1] dark:bg-slate-800 text-white shadow-lg sticky top-0 z-50 transition-colors duration-200">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           
           <div className="flex items-center gap-4">
@@ -54,18 +71,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             ))}
           </nav>
 
-          {/* Mobile Menu Button */}
-          <button 
-            className="md:hidden p-2 rounded-md hover:bg-white/20"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            <Menu size={24} />
-          </button>
+          <div className="flex items-center gap-2">
+             {/* Dark Mode Toggle */}
+             <button 
+                onClick={() => setIsDark(!isDark)}
+                className="p-2 text-indigo-100 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                title={isDark ? 'מצב יום' : 'מצב לילה'}
+             >
+                {isDark ? <Sun size={20} /> : <Moon size={20} />}
+             </button>
+
+             {/* Mobile Menu Button */}
+             <button 
+                className="md:hidden p-2 rounded-md hover:bg-white/20"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+             >
+                <Menu size={24} />
+             </button>
+          </div>
         </div>
 
         {/* Mobile Nav Drawer */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-indigo-500 bg-[#664FE1] pb-4">
+          <div className="md:hidden border-t border-indigo-500 bg-[#664FE1] dark:bg-slate-800 pb-4">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -73,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={({ isActive }) =>
                   `block px-6 py-3 text-base font-medium ${
-                    isActive ? 'bg-indigo-700 text-white' : 'text-indigo-100'
+                    isActive ? 'bg-indigo-700 dark:bg-slate-700 text-white' : 'text-indigo-100'
                   }`
                 }
               >
