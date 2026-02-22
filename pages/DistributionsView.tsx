@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Plus, Search, Save, X, Trash2, Share2, Database, CalendarClock, ArrowRight } from 'lucide-react';
+import { Plus, Search, Save, X, Trash2, Share2, Database, CalendarClock, ArrowRight, LayoutGrid, List, Layers, Server } from 'lucide-react';
 import { apiService } from '../services/api';
 import { DistributionDistributerDistribution, DistributionDistributerType, DistributionSchedulerSchedule, DistributionCollectorQuery } from '../types';
 import SplitView from '../components/ui/SplitView';
 import { StatusBadge } from '../components/ui/Badge';
+import { motion } from 'framer-motion';
 
 const DistributionsView: React.FC = () => {
   const [distributions, setDistributions] = useState<DistributionDistributerDistribution[]>([]);
@@ -13,6 +14,7 @@ const DistributionsView: React.FC = () => {
   const [queries, setQueries] = useState<DistributionCollectorQuery[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'lineage'>('table');
   
   const [selectedDist, setSelectedDist] = useState<Partial<DistributionDistributerDistribution> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -87,6 +89,106 @@ const DistributionsView: React.FC = () => {
       }
   };
 
+  const LineageMap = () => {
+    return (
+        <div className="flex-1 overflow-auto p-6 bg-slate-50 dark:bg-slate-900/50 space-y-8">
+            <div className="mb-4">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white">מפת שרשרת הפצה</h3>
+                <p className="text-xs text-slate-400">מעקב ויזואלי אחר זרימת הנתונים מהמקור ועד ליעד</p>
+            </div>
+
+            <div className="space-y-12">
+                {filtered.map((dist, idx) => {
+                    const { schedule, query } = getContext(dist.scheduleId);
+                    const system = query?.system;
+
+                    return (
+                        <motion.div 
+                            key={dist.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: idx * 0.1 }}
+                            className="relative"
+                        >
+                            {/* Lineage Track */}
+                            <div className="flex items-center gap-4 md:gap-8">
+                                
+                                {/* Node: System */}
+                                <div className="flex flex-col items-center gap-2 w-32 shrink-0">
+                                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 shadow-sm">
+                                        <Server size={20} />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">מערכת</p>
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate w-32">{system?.name || 'לא ידוע'}</p>
+                                    </div>
+                                </div>
+
+                                <ArrowRight className="text-slate-300 dark:text-slate-600 shrink-0" size={16} />
+
+                                {/* Node: Query */}
+                                <div className="flex flex-col items-center gap-2 w-32 shrink-0">
+                                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 flex items-center justify-center text-indigo-500 shadow-sm">
+                                        <Database size={20} />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[10px] font-bold text-indigo-400 uppercase">שאילתה</p>
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate w-32">{query?.name || 'לא ידוע'}</p>
+                                    </div>
+                                </div>
+
+                                <ArrowRight className="text-slate-300 dark:text-slate-600 shrink-0" size={16} />
+
+                                {/* Node: Schedule */}
+                                <div className="flex flex-col items-center gap-2 w-32 shrink-0">
+                                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 flex items-center justify-center text-emerald-500 shadow-sm">
+                                        <CalendarClock size={20} />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[10px] font-bold text-emerald-500 uppercase">תזמון</p>
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate w-32">{schedule?.name || 'לא ידוע'}</p>
+                                    </div>
+                                </div>
+
+                                <ArrowRight className="text-slate-300 dark:text-slate-600 shrink-0" size={16} />
+
+                                {/* Node: Distribution (Target) */}
+                                <div 
+                                    onClick={() => {
+                                        setSelectedDist({...dist});
+                                        setIsEditing(true);
+                                        setActiveTab('general');
+                                    }}
+                                    className={`flex flex-col items-center gap-2 w-48 shrink-0 cursor-pointer group`}
+                                >
+                                    <div className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center shadow-lg transition-all group-hover:scale-110 ${dist.isActive ? 'bg-amber-500 border-amber-400 text-white' : 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-500'}`}>
+                                        <Share2 size={20} />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[10px] font-bold text-amber-500 uppercase">הפצה: {dist.id}</p>
+                                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{dist.distributionType?.name}</p>
+                                        <div className="mt-1">
+                                            <StatusBadge isActive={dist.isActive} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                            
+                            {/* Background Track Line */}
+                            <div className="absolute top-6 left-6 right-24 h-0.5 bg-slate-200 dark:bg-slate-800 -z-10" />
+                        </motion.div>
+                    );
+                })}
+
+                {filtered.length === 0 && (
+                    <div className="text-center py-20 text-slate-400 italic">לא נמצאו הפצות להצגה במפה</div>
+                )}
+            </div>
+        </div>
+    );
+  };
+
   const renderContextTab = () => {
       const { schedule, query } = getContext(selectedDist?.scheduleId);
 
@@ -155,16 +257,36 @@ const DistributionsView: React.FC = () => {
   return (
     <div className="h-full flex flex-col space-y-4">
       <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-200">
-        <div className="relative w-72">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="חיפוש לפי מזהה, סוג..."
-            className="w-full pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#664FE1] focus:border-transparent text-slate-800 dark:text-slate-100 transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex items-center gap-4">
+            <div className="relative w-72">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+                type="text"
+                placeholder="חיפוש לפי מזהה, סוג..."
+                className="w-full pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#664FE1] focus:border-transparent text-slate-800 dark:text-slate-100 transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            </div>
+
+            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                <button 
+                    onClick={() => setViewMode('table')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-500' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="תצוגת טבלה"
+                >
+                    <List size={18} />
+                </button>
+                <button 
+                    onClick={() => setViewMode('lineage')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'lineage' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-500' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="תצוגת שרשרת הפצה"
+                >
+                    <Layers size={18} />
+                </button>
+            </div>
         </div>
+
         <button 
           onClick={handleNew}
           className="bg-[#664FE1] hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-all active:scale-95"
@@ -178,44 +300,48 @@ const DistributionsView: React.FC = () => {
         showDetail={isEditing}
         onCloseDetail={() => setIsEditing(false)}
         list={
-          <div className="overflow-auto flex-1">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
-                <tr>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">מזהה</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סוג</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">תזמון משוייך</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סטטוס</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {filtered.map((item) => (
-                  <tr 
-                    key={item.id} 
-                    onClick={() => { 
-                        setSelectedDist({...item}); 
-                        setIsEditing(true); 
-                        setActiveTab('general');
-                    }}
-                    className={`cursor-pointer transition-colors ${selectedDist?.id === item.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
-                  >
-                    <td className="px-6 py-4 font-mono text-slate-500 dark:text-slate-400">{item.id}</td>
-                    <td className="px-6 py-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                        <Share2 size={14} className="text-slate-400"/>
-                        {item.distributionType?.name}
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono text-xs">{item.scheduleId}</td>
-                    <td className="px-6 py-4">
-                      <StatusBadge isActive={item.isActive} />
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr><td colSpan={4} className="text-center py-12 text-slate-400">לא נמצאו תוצאות</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          viewMode === 'table' ? (
+            <div className="overflow-auto flex-1">
+                <table className="w-full text-right text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
+                    <tr>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">מזהה</th>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סוג</th>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">תזמון משוייך</th>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סטטוס</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    {filtered.map((item) => (
+                    <tr 
+                        key={item.id} 
+                        onClick={() => { 
+                            setSelectedDist({...item}); 
+                            setIsEditing(true); 
+                            setActiveTab('general');
+                        }}
+                        className={`cursor-pointer transition-colors ${selectedDist?.id === item.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                    >
+                        <td className="px-6 py-4 font-mono text-slate-500 dark:text-slate-400">{item.id}</td>
+                        <td className="px-6 py-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                            <Share2 size={14} className="text-slate-400"/>
+                            {item.distributionType?.name}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 font-mono text-xs">{item.scheduleId}</td>
+                        <td className="px-6 py-4">
+                        <StatusBadge isActive={item.isActive} />
+                        </td>
+                    </tr>
+                    ))}
+                    {filtered.length === 0 && (
+                    <tr><td colSpan={4} className="text-center py-12 text-slate-400">לא נמצאו תוצאות</td></tr>
+                    )}
+                </tbody>
+                </table>
+            </div>
+          ) : (
+            <LineageMap />
+          )
         }
         detail={
           selectedDist && (
