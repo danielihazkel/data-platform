@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Plus, Search, Save, X, Calendar, Clock, Share2, Layers } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Search, Save, X, Calendar, Clock, Share2, Layers, LayoutGrid, List, AlertTriangle } from 'lucide-react';
+import { format, startOfDay, addHours, isSameDay, parseISO } from 'date-fns';
 import { apiService } from '../services/api';
 import { DistributionSchedulerSchedule, DistributionSchedulerGroup, DistributionCollectorQuery, DistributionDistributerDistribution } from '../types';
 import SplitView from '../components/ui/SplitView';
 import { StatusBadge } from '../components/ui/Badge';
+import { motion, AnimatePresence } from 'framer-motion';
+import cronstrue from 'cronstrue/i18n';
 
 const SchedulesView: React.FC = () => {
   const [schedules, setSchedules] = useState<DistributionSchedulerSchedule[]>([]);
@@ -15,6 +17,7 @@ const SchedulesView: React.FC = () => {
   const [distributions, setDistributions] = useState<DistributionDistributerDistribution[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'timeline'>('table');
   
   const [selectedSchedule, setSelectedSchedule] = useState<Partial<DistributionSchedulerSchedule> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -99,6 +102,126 @@ const SchedulesView: React.FC = () => {
       }
   };
 
+  const getCronDescription = (cron: string) => {
+    if (!cron) return '';
+    try {
+      return cronstrue.toString(cron, { locale: 'he', use24HourTimeFormat: true });
+    } catch (e) {
+      return 'ביטוי Cron לא תקין';
+    }
+  };
+
+  const TimelineView = () => {
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    
+    // Group schedules by hour for conflict detection
+    const schedulesByHour = useMemo(() => {
+        const map: Record<number, DistributionSchedulerSchedule[]> = {};
+        filteredSchedules.forEach(s => {
+            if (!s.nextRun) return;
+            const date = parseISO(s.nextRun);
+            const hour = date.getHours();
+            if (!map[hour]) map[hour] = [];
+            map[hour].push(s);
+        });
+        return map;
+    }, [filteredSchedules]);
+
+    return (
+        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900/50 p-6">
+            <div className="mb-6 flex justify-between items-center">
+                <div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">לוח זמנים יומי</h3>
+                    <p className="text-xs text-slate-400">תצוגת תזמונים לפי שעות היממה (מבוסס על ריצה הבאה)</p>
+                </div>
+                <div className="flex gap-4 text-xs">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded bg-indigo-500" />
+                        <span className="text-slate-500">תזמון פעיל</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded bg-slate-300 dark:bg-slate-700" />
+                        <span className="text-slate-500">לא פעיל</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <AlertTriangle size={14} className="text-amber-500" />
+                        <span className="text-slate-500">חשש לעומס</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-x-auto overflow-y-auto pb-8 custom-scrollbar">
+                <div className="min-w-[1200px] relative pt-10">
+                    {/* Hour Markers */}
+                    <div className="flex border-b border-slate-200 dark:border-slate-700 pb-2">
+                        {hours.map(h => (
+                            <div key={h} className="flex-1 text-center text-[10px] font-bold text-slate-400 border-r border-slate-100 dark:border-slate-800 last:border-0">
+                                {h.toString().padStart(2, '0')}:00
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Timeline Grid */}
+                    <div className="flex h-64 relative">
+                        {hours.map(h => (
+                            <div key={h} className="flex-1 border-r border-slate-100 dark:border-slate-800/50 last:border-0 relative">
+                                {schedulesByHour[h] && schedulesByHour[h].length > 2 && (
+                                    <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10" title="ריבוי תזמונים בשעה זו">
+                                        <AlertTriangle size={16} className="text-amber-500 animate-pulse" />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+
+                        {/* Schedule Blocks */}
+                        {filteredSchedules.map((s, idx) => {
+                            if (!s.nextRun) return null;
+                            const date = parseISO(s.nextRun);
+                            const hour = date.getHours();
+                            const minute = date.getMinutes();
+                            const leftPercent = ((hour + minute / 60) / 24) * 100;
+                            
+                            return (
+                                <motion.div
+                                    key={s.id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    style={{ left: `${leftPercent}%`, top: `${(idx % 5) * 50 + 40}px` }}
+                                    onClick={() => {
+                                        setSelectedSchedule({
+                                            ...s,
+                                            nextRun: formatDateForInput(s.nextRun)
+                                        });
+                                        setIsEditing(true);
+                                        setActiveTab('general');
+                                    }}
+                                    className={`absolute z-20 group cursor-pointer`}
+                                >
+                                    <div className={`
+                                        px-3 py-2 rounded-xl shadow-lg border-2 transition-all group-hover:scale-105 group-hover:-translate-y-1 whitespace-nowrap flex items-center gap-2
+                                        ${s.isActive 
+                                            ? 'bg-white dark:bg-slate-800 border-indigo-500 text-slate-700 dark:text-slate-200' 
+                                            : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-400'}
+                                    `}>
+                                        <Clock size={14} className={s.isActive ? 'text-indigo-500' : 'text-slate-400'} />
+                                        <div className="flex flex-col leading-tight">
+                                            <span className="text-xs font-bold">{s.name}</span>
+                                            <span className="text-[9px] opacity-60 font-mono">{format(date, 'HH:mm')}</span>
+                                        </div>
+                                    </div>
+                                    {/* Connector Line */}
+                                    <div className={`absolute top-full left-1/2 -translate-x-1/2 w-px h-4 bg-slate-200 dark:bg-slate-700`} />
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+  };
+
   const renderUsageTab = () => {
       if (!selectedSchedule?.id) return <div className="text-center text-slate-400 p-8">יש לשמור את התזמון לפני צפייה בשימושים</div>;
 
@@ -134,16 +257,36 @@ const SchedulesView: React.FC = () => {
   return (
     <div className="h-full flex flex-col space-y-4">
       <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-200">
-        <div className="relative w-72">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="חיפוש לפי שם, קבוצה..."
-            className="w-full pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#664FE1] focus:border-transparent text-slate-800 dark:text-slate-100 transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="flex items-center gap-4">
+            <div className="relative w-72">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+                type="text"
+                placeholder="חיפוש לפי שם, קבוצה..."
+                className="w-full pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#664FE1] focus:border-transparent text-slate-800 dark:text-slate-100 transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            </div>
+            
+            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                <button 
+                    onClick={() => setViewMode('table')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-500' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="תצוגת טבלה"
+                >
+                    <List size={18} />
+                </button>
+                <button 
+                    onClick={() => setViewMode('timeline')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'timeline' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-500' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="תצוגת ציר זמן"
+                >
+                    <LayoutGrid size={18} />
+                </button>
+            </div>
         </div>
+
         <button 
           onClick={handleNew}
           className="bg-[#664FE1] hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-all active:scale-95"
@@ -157,57 +300,61 @@ const SchedulesView: React.FC = () => {
         showDetail={isEditing}
         onCloseDetail={() => setIsEditing(false)}
         list={
-          <div className="overflow-auto flex-1">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
-                <tr>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">מזהה</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">שם</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">קבוצה</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">שימושים</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סטטוס</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {filteredSchedules.map((item) => {
-                    const stats = getUsageStats(item.id);
-                    return (
-                        <tr 
-                            key={item.id} 
-                            onClick={() => {
-                                setSelectedSchedule({
-                                    ...item,
-                                    nextRun: formatDateForInput(item.nextRun)
-                                });
-                                setIsEditing(true);
-                                setActiveTab('general');
-                            }}
-                            className={`cursor-pointer transition-colors ${selectedSchedule?.id === item.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
-                        >
-                            <td className="px-6 py-4 font-mono text-slate-500 dark:text-slate-400">{item.id}</td>
-                            <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200">{item.name}</td>
-                            <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{item.group?.name || '-'}</td>
-                            <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                                {stats.relDistributions.length > 0 ? (
-                                   <span title={`${stats.relDistributions.length} הפצות`} className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 rounded-full text-xs font-medium flex items-center gap-1 w-fit">
-                                      <Share2 size={12} /> {stats.relDistributions.length}
-                                   </span>
-                                ) : (
-                                    <span className="text-slate-400 text-xs">-</span>
-                                )}
-                            </td>
-                            <td className="px-6 py-4">
-                            <StatusBadge isActive={item.isActive} />
-                            </td>
-                        </tr>
-                    )
-                })}
-                {filteredSchedules.length === 0 && (
-                  <tr><td colSpan={5} className="text-center py-12 text-slate-400">לא נמצאו תוצאות</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          viewMode === 'table' ? (
+            <div className="overflow-auto flex-1">
+                <table className="w-full text-right text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
+                    <tr>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">מזהה</th>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">שם</th>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">קבוצה</th>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">שימושים</th>
+                    <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סטטוס</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    {filteredSchedules.map((item) => {
+                        const stats = getUsageStats(item.id);
+                        return (
+                            <tr 
+                                key={item.id} 
+                                onClick={() => {
+                                    setSelectedSchedule({
+                                        ...item,
+                                        nextRun: formatDateForInput(item.nextRun)
+                                    });
+                                    setIsEditing(true);
+                                    setActiveTab('general');
+                                }}
+                                className={`cursor-pointer transition-colors ${selectedSchedule?.id === item.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                            >
+                                <td className="px-6 py-4 font-mono text-slate-500 dark:text-slate-400">{item.id}</td>
+                                <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200">{item.name}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{item.group?.name || '-'}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                                    {stats.relDistributions.length > 0 ? (
+                                    <span title={`${stats.relDistributions.length} הפצות`} className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 rounded-full text-xs font-medium flex items-center gap-1 w-fit">
+                                        <Share2 size={12} /> {stats.relDistributions.length}
+                                    </span>
+                                    ) : (
+                                        <span className="text-slate-400 text-xs">-</span>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4">
+                                <StatusBadge isActive={item.isActive} />
+                                </td>
+                            </tr>
+                        )
+                    })}
+                    {filteredSchedules.length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-12 text-slate-400">לא נמצאו תוצאות</td></tr>
+                    )}
+                </tbody>
+                </table>
+            </div>
+          ) : (
+            <TimelineView />
+          )
         }
         detail={
           selectedSchedule && (
@@ -323,6 +470,11 @@ const SchedulesView: React.FC = () => {
                                     placeholder="* * * * *"
                                 />
                                 <p className="text-[10px] text-slate-400">Sec Min Hour Day Month DayOfWeek</p>
+                                {selectedSchedule.cron && (
+                                    <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400 mt-1 bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded border border-indigo-100 dark:border-indigo-800">
+                                        {getCronDescription(selectedSchedule.cron)}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-1">
