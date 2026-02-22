@@ -93,14 +93,31 @@ const SchedulesView: React.FC = () => {
     }
   };
 
+//   const formatDateForInput = (isoString?: string) => {
+//       if (!isoString) return '';
+//       try {
+//         return new Date(isoString).toISOString().slice(0, 16);
+//       } catch (e) {
+//           return '';
+//       }
+//   };
+
   const formatDateForInput = (isoString?: string) => {
-      if (!isoString) return '';
-      try {
-        return new Date(isoString).toISOString().slice(0, 16);
-      } catch (e) {
-          return '';
-      }
-  };
+    if (!isoString) return '';
+    try {
+      const date = new Date(isoString);
+      // Get local time components
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+     
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (e) {
+        return '';
+    }
+};
 
   const getCronDescription = (cron: string) => {
     if (!cron) return '';
@@ -187,7 +204,7 @@ const SchedulesView: React.FC = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: idx * 0.05 }}
-                                    style={{ left: `${leftPercent}%`, top: `${(idx % 5) * 50 + 40}px` }}
+                                    style={{ right: `${leftPercent}%`, top: `${(idx % 5) * 50 + 40}px` }}
                                     onClick={() => {
                                         setSelectedSchedule({
                                             ...s,
