@@ -4,6 +4,7 @@ import { apiService } from '../services/api';
 import { DistributionCollectorQuery, DistributionCollectorSystem, QueryTestResult, DistributionSchedulerSchedule, DistributionDistributerDistribution } from '../types';
 import SplitView from '../components/ui/SplitView';
 import { StatusBadge } from '../components/ui/Badge';
+import { motion } from 'framer-motion';
 
 const QueriesView: React.FC = () => {
   const [queries, setQueries] = useState<DistributionCollectorQuery[]>([]);
@@ -18,6 +19,7 @@ const QueriesView: React.FC = () => {
   
   const [selectedQuery, setSelectedQuery] = useState<Partial<DistributionCollectorQuery> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isPlaygroundMode, setIsPlaygroundMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'usage'>('general');
 
   // Testing State
@@ -63,8 +65,16 @@ const QueriesView: React.FC = () => {
   const handleSelect = (query: DistributionCollectorQuery) => {
     setSelectedQuery({ ...query });
     setIsEditing(true);
+    setIsPlaygroundMode(false);
     setActiveTab('general');
     setTestResult(null); 
+  };
+
+  const handleOpenPlayground = (query: DistributionCollectorQuery) => {
+    setSelectedQuery({ ...query });
+    setIsPlaygroundMode(true);
+    setIsEditing(false);
+    setTestResult(null);
   };
 
   const handleNew = () => {
@@ -80,6 +90,7 @@ const QueriesView: React.FC = () => {
       systemId: ''
     });
     setIsEditing(true);
+    setIsPlaygroundMode(false);
     setActiveTab('general');
     setTestResult(null);
   };
@@ -92,7 +103,9 @@ const QueriesView: React.FC = () => {
     
     setIsTesting(true);
     setTestResult(null);
-    setShowTestModal(true);
+    if (!isPlaygroundMode) {
+        setShowTestModal(true);
+    }
 
     try {
         const result = await apiService.testQuery(selectedQuery);
@@ -104,8 +117,8 @@ const QueriesView: React.FC = () => {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedQuery) return;
     
     if (!selectedQuery.id || !selectedQuery.name || !selectedQuery.systemId) {
@@ -121,6 +134,7 @@ const QueriesView: React.FC = () => {
       
       await loadData();
       setIsEditing(false);
+      setIsPlaygroundMode(false);
       setSelectedQuery(null);
     } catch (err) {
       console.error(err);
@@ -187,6 +201,135 @@ const QueriesView: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col space-y-4 relative">
+      {isPlaygroundMode && selectedQuery ? (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 flex flex-col"
+        >
+          {/* Playground Header */}
+          <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 flex justify-between items-center shadow-sm">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setIsPlaygroundMode(false)}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500"
+              >
+                <X size={20} />
+              </button>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Layers size={22} className="text-indigo-500" />
+                  Playground: {selectedQuery.name}
+                </h2>
+                <p className="text-xs text-slate-400 font-mono">{selectedQuery.id} | {selectedQuery.dataSource}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleTest}
+                disabled={isTesting}
+                className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white px-6 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              >
+                {isTesting ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} className="fill-current" />}
+                הרץ שאילתה
+              </button>
+              <button 
+                onClick={() => handleSave()}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+              >
+                <Save size={18} />
+                שמור שינויים
+              </button>
+            </div>
+          </div>
+
+          {/* Playground Content */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Editor Side */}
+            <div className="w-1/2 flex flex-col border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">SQL Editor</span>
+                <div className="flex gap-2">
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-500">SQL</span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-500">RTL Support</span>
+                </div>
+              </div>
+              <div className="flex-1 relative">
+                <textarea
+                  dir="ltr"
+                  spellCheck={false}
+                  className="absolute inset-0 w-full h-full p-6 font-mono text-sm bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-indigo-300 focus:outline-none resize-none leading-relaxed"
+                  value={selectedQuery.dataQuery || ''}
+                  onChange={e => setSelectedQuery({...selectedQuery, dataQuery: e.target.value})}
+                  placeholder="-- Write your SQL query here..."
+                />
+              </div>
+            </div>
+
+            {/* Preview Side */}
+            <div className="w-1/2 flex flex-col bg-slate-50 dark:bg-slate-900">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Results Preview</span>
+                {testResult?.executionTimeMs && (
+                  <span className="text-[10px] text-emerald-500 font-medium">Execution: {testResult.executionTimeMs}ms</span>
+                )}
+              </div>
+              <div className="flex-1 overflow-auto p-6">
+                {isTesting ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
+                    <Loader2 size={48} className="animate-spin text-indigo-500 opacity-50" />
+                    <p className="animate-pulse">מריץ שאילתה...</p>
+                  </div>
+                ) : testResult ? (
+                  <div className="space-y-4 animate-fadeIn">
+                    {!testResult.success ? (
+                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-2xl text-red-600 dark:text-red-400 flex gap-3">
+                        <AlertCircle size={20} className="shrink-0" />
+                        <div>
+                          <p className="font-bold">שגיאת הרצה</p>
+                          <p className="text-sm mt-1 font-mono">{testResult.error}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-right text-sm">
+                            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+                              <tr>
+                                {testResult.columns?.map((col) => (
+                                  <th key={col} className="px-4 py-3 font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">{col}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                              {testResult.rows?.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                  {testResult.columns?.map((col) => (
+                                    <td key={col} className="px-4 py-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">{row[col]}</td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="p-3 bg-slate-50 dark:bg-slate-900/50 text-center text-[10px] text-slate-400 border-t border-slate-100 dark:border-slate-700">
+                          מוצגות {testResult.rows?.length || 0} רשומות
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4 opacity-50">
+                    <Play size={64} className="text-slate-200 dark:text-slate-700" />
+                    <p>לחץ על "הרץ שאילתה" כדי לראות תוצאות</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      ) : null}
+
       {/* Action Bar */}
       <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors duration-200">
         <div className="relative w-72">
@@ -243,7 +386,7 @@ const QueriesView: React.FC = () => {
                             {item.system?.name || '-'}
                         </td>
                         <td className="px-6 py-4">
-                           <div className="flex gap-2">
+                           <div className="flex gap-2 items-center">
                                {stats.relSchedules.length > 0 && (
                                    <span title={`${stats.relSchedules.length} תזמונים`} className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-full text-xs font-medium flex items-center gap-1">
                                       <CalendarClock size={12} /> {stats.relSchedules.length}
@@ -257,6 +400,17 @@ const QueriesView: React.FC = () => {
                                {stats.relSchedules.length === 0 && stats.relDistributions.length === 0 && (
                                    <span className="text-slate-400 text-xs">-</span>
                                )}
+                               
+                               <button 
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   handleOpenPlayground(item);
+                                 }}
+                                 className="mr-auto p-1.5 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                                 title="פתח Playground"
+                               >
+                                 <Play size={16} />
+                               </button>
                            </div>
                         </td>
                         <td className="px-6 py-4">
@@ -290,21 +444,33 @@ const QueriesView: React.FC = () => {
                 </div>
                 
                 {/* Tabs */}
-                <div className="flex gap-6">
-                    <button 
-                        onClick={() => setActiveTab('general')}
-                        className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'general' ? 'text-[#664FE1] dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
-                    >
-                        פרטים כלליים
-                        {activeTab === 'general' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1] dark:bg-indigo-400 rounded-t-full"></div>}
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('usage')}
-                        className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'usage' ? 'text-[#664FE1] dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
-                    >
-                        שימושים ותלויות
-                        {activeTab === 'usage' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1] dark:bg-indigo-400 rounded-t-full"></div>}
-                    </button>
+                <div className="flex justify-between items-end">
+                    <div className="flex gap-6">
+                        <button 
+                            onClick={() => setActiveTab('general')}
+                            className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'general' ? 'text-[#664FE1] dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                        >
+                            פרטים כלליים
+                            {activeTab === 'general' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1] dark:bg-indigo-400 rounded-t-full"></div>}
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('usage')}
+                            className={`pb-3 text-sm font-medium transition-colors relative ${activeTab === 'usage' ? 'text-[#664FE1] dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                        >
+                            שימושים ותלויות
+                            {activeTab === 'usage' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#664FE1] dark:bg-indigo-400 rounded-t-full"></div>}
+                        </button>
+                    </div>
+                    
+                    {activeTab === 'general' && (
+                        <button 
+                            onClick={() => handleOpenPlayground(selectedQuery as DistributionCollectorQuery)}
+                            className="mb-2 text-xs font-bold text-indigo-500 flex items-center gap-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 py-1 rounded-lg transition-colors"
+                        >
+                            <Play size={12} className="fill-current" />
+                            פתח Playground
+                        </button>
+                    )}
                 </div>
               </div>
               
