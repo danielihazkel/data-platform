@@ -84,7 +84,7 @@ export const mockDistributions: DistributionDistributerDistribution[] = [
     id: 'DST001',
     distributionType: mockTypes[0],
     scheduleId: 'SCH001',
-    parameters: '{"to": "managers@menora.co.il", "subject": "Daily Report"}',
+    parameters: '{"to": "managers@men.co.il", "subject": "Daily Report"}',
     isActive: 1,
     createTs: new Date().toISOString()
   },

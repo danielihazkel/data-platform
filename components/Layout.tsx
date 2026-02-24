@@ -48,7 +48,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <h1 className="text-xl font-bold tracking-tight hidden md:block">
               תשתית אחזור והפצת מידעים
             </h1>
-            <h1 className="text-lg font-bold md:hidden">Menora Data</h1>
+            <h1 className="text-lg font-bold md:hidden">Data</h1>
           </div>
 
           {/* Desktop Nav */}
