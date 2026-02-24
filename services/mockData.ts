@@ -53,6 +53,32 @@ export const mockQueries: DistributionCollectorQuery[] = [
     isActive: 1,
     system: mockSystems[2],
     createTs: new Date().toISOString()
+  },
+  {
+    id: 'QRY003',
+    systemId: 'SYS002',
+    name: 'Monthly Revenue Report',
+    description: 'Aggregated revenue per product line for reporting',
+    dataSource: 'SQLServer_Reporting',
+    dataQuery: 'SELECT product_line, SUM(revenue) FROM sales GROUP BY product_line',
+    dataColumns: 'product_line, revenue',
+    maxResults: 200,
+    isActive: 1,
+    system: mockSystems[1],
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'QRY004',
+    systemId: 'SYS003',
+    name: 'User Behavior Analytics',
+    description: 'Clickstream and session data for product analytics',
+    dataSource: 'Postgres_Analytics',
+    dataQuery: 'SELECT session_id, user_id, duration FROM sessions WHERE created_at > NOW() - INTERVAL 7 DAY',
+    dataColumns: 'session_id, user_id, duration, page_count',
+    maxResults: 10000,
+    isActive: 0,
+    system: mockSystems[2],
+    createTs: new Date().toISOString()
   }
 ];
 
@@ -76,6 +102,56 @@ export const mockSchedules: DistributionSchedulerSchedule[] = [
     nextRun: new Date(Date.now() + 172800000).toISOString(),
     isActive: 0,
     createTs: new Date().toISOString()
+  },
+  {
+    id: 'SCH003',
+    name: 'End of Day Summary',
+    queryId: 'QRY003',
+    group: mockGroups[1],
+    cron: '0 0 18 * * MON-FRI',
+    nextRun: new Date(Date.now() + 86400000).toISOString(),
+    isActive: 1,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'SCH004',
+    name: 'Nightly Cleanup',
+    queryId: 'QRY001',
+    group: mockGroups[2],
+    cron: '0 30 2 * * *',
+    nextRun: new Date(Date.now() + 43200000).toISOString(),
+    isActive: 1,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'SCH005',
+    name: 'Monthly Billing',
+    queryId: 'QRY003',
+    group: mockGroups[1],
+    cron: '0 0 9 1 * ?',
+    nextRun: new Date(Date.now() + 604800000).toISOString(),
+    isActive: 1,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'SCH006',
+    name: 'Midday Check',
+    queryId: 'QRY002',
+    group: mockGroups[0],
+    cron: '0 0 12 * * MON,WED,FRI',
+    nextRun: new Date(Date.now() + 259200000).toISOString(),
+    isActive: 0,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'SCH007',
+    name: 'Morning Alerts',
+    queryId: 'QRY004',
+    group: mockGroups[2],
+    cron: '0 0 8 * * MON-FRI',
+    nextRun: new Date(Date.now() + 86400000).toISOString(),
+    isActive: 1,
+    createTs: new Date().toISOString()
   }
 ];
 
@@ -94,6 +170,38 @@ export const mockDistributions: DistributionDistributerDistribution[] = [
     scheduleId: 'SCH002',
     parameters: '{"host": "sftp.partner.com", "path": "/uploads"}',
     isActive: 1,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'DST003',
+    distributionType: mockTypes[2],
+    scheduleId: 'SCH003',
+    parameters: '{"topic": "eod-summary", "broker": "kafka-prod:9092"}',
+    isActive: 1,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'DST004',
+    distributionType: mockTypes[0],
+    scheduleId: 'SCH004',
+    parameters: '{"to": "ops@men.co.il", "subject": "Nightly Cleanup Report"}',
+    isActive: 0,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'DST005',
+    distributionType: mockTypes[1],
+    scheduleId: 'SCH005',
+    parameters: '{"host": "sftp.billing.com", "path": "/monthly"}',
+    isActive: 1,
+    createTs: new Date().toISOString()
+  },
+  {
+    id: 'DST006',
+    distributionType: mockTypes[2],
+    scheduleId: 'SCH006',
+    parameters: '{"topic": "midday-alerts", "broker": "kafka-prod:9092"}',
+    isActive: 0,
     createTs: new Date().toISOString()
   }
 ];

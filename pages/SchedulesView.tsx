@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Plus, Search, Save, X, Calendar, Clock, Share2, Layers, LayoutGrid, List, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Save, X, Calendar, Clock, Share2, Layers, LayoutGrid, List, AlertTriangle, Grid3x3 } from 'lucide-react';
 import { format, startOfDay, addHours, isSameDay, parseISO } from 'date-fns';
 import { apiService } from '../services/api';
 import { DistributionSchedulerSchedule, DistributionSchedulerGroup, DistributionCollectorQuery, DistributionDistributerDistribution } from '../types';
@@ -7,6 +7,7 @@ import SplitView from '../components/ui/SplitView';
 import { StatusBadge } from '../components/ui/Badge';
 import { motion, AnimatePresence } from 'framer-motion';
 import cronstrue from 'cronstrue/i18n';
+import { parseCronFireSlots } from '../services/cronParser';
 
 const SchedulesView: React.FC = () => {
   const [schedules, setSchedules] = useState<DistributionSchedulerSchedule[]>([]);
@@ -17,7 +18,7 @@ const SchedulesView: React.FC = () => {
   const [distributions, setDistributions] = useState<DistributionDistributerDistribution[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'table' | 'timeline'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'timeline' | 'heatmap'>('table');
   
   const [selectedSchedule, setSelectedSchedule] = useState<Partial<DistributionSchedulerSchedule> | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -42,12 +43,27 @@ const SchedulesView: React.FC = () => {
 
   const filteredSchedules = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return schedules.filter(s => 
-      s.name.toLowerCase().includes(term) || 
+    return schedules.filter(s =>
+      s.name.toLowerCase().includes(term) ||
       s.id.toLowerCase().includes(term) ||
       s.group?.name.toLowerCase().includes(term)
     );
   }, [schedules, searchTerm]);
+
+  const heatmapData = useMemo(() => {
+    const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    filteredSchedules.forEach(s => {
+      if (!s.isActive) return;
+      const slots = parseCronFireSlots(s.cron);
+      slots.forEach(({ dayIndex, hour }) => {
+        if (dayIndex >= 0 && dayIndex < 7 && hour >= 0 && hour < 24) {
+          grid[dayIndex][hour]++;
+        }
+      });
+    });
+    const maxCount = Math.max(1, ...grid.flat());
+    return { grid, maxCount };
+  }, [filteredSchedules]);
 
   const getUsageStats = (scheduleId: string) => {
     const relDistributions = distributions.filter(d => d.scheduleId === scheduleId);
@@ -239,6 +255,79 @@ const SchedulesView: React.FC = () => {
     );
   };
 
+  const HeatmapView = () => {
+    const dayLabels = ['שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת', 'ראשון'];
+    const { grid, maxCount } = heatmapData;
+
+    const getCellColor = (count: number, isDark: boolean) => {
+      if (count === 0) return isDark ? 'hsl(239,20%,20%)' : 'hsl(239,20%,95%)';
+      const ratio = count / maxCount;
+      if (isDark) return `hsl(239,84%,${70 - ratio * 35}%)`;
+      return `hsl(239,84%,${90 - ratio * 55}%)`;
+    };
+
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900/50 p-6">
+        <div className="mb-4 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white">מפת חום שבועית</h3>
+            <p className="text-xs text-slate-400">צפיפות תזמונים פעילים לפי יום ושעה</p>
+          </div>
+          {/* Legend */}
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>נמוך</span>
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => (
+              <div
+                key={i}
+                className="w-5 h-5 rounded"
+                style={{ backgroundColor: ratio === 0 ? 'hsl(239,20%,95%)' : `hsl(239,84%,${90 - ratio * 55}%)` }}
+              />
+            ))}
+            <span>גבוה</span>
+          </div>
+        </div>
+
+        <div className="overflow-auto flex-1 custom-scrollbar" dir="ltr">
+          <div className="min-w-[640px]">
+            {/* Hour headers */}
+            <div className="flex mb-1 pr-16">
+              {Array.from({ length: 24 }, (_, h) => (
+                <div key={h} className="flex-1 text-center text-[9px] font-bold text-slate-400">
+                  {h % 3 === 0 ? String(h).padStart(2, '0') : ''}
+                </div>
+              ))}
+            </div>
+
+            {/* Grid rows */}
+            {dayLabels.map((label, dayIdx) => (
+              <div key={dayIdx} className="flex items-center mb-1">
+                <div className="w-16 text-left text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0" dir="rtl">
+                  {label}
+                </div>
+                {Array.from({ length: 24 }, (_, hour) => {
+                  const count = grid[dayIdx][hour];
+                  return (
+                    <div
+                      key={hour}
+                      className="flex-1 aspect-square mx-px rounded-sm cursor-default transition-transform hover:scale-110"
+                      style={{ backgroundColor: getCellColor(count, false) }}
+                      title={`${label} ${String(hour).padStart(2, '0')}:00 — ${count} תזמונים`}
+                    >
+                      <div
+                        className="w-full h-full rounded-sm hidden dark:block"
+                        style={{ backgroundColor: getCellColor(count, true) }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderUsageTab = () => {
       if (!selectedSchedule?.id) return <div className="text-center text-slate-400 p-8">יש לשמור את התזמון לפני צפייה בשימושים</div>;
 
@@ -294,12 +383,19 @@ const SchedulesView: React.FC = () => {
                 >
                     <List size={18} />
                 </button>
-                <button 
+                <button
                     onClick={() => setViewMode('timeline')}
                     className={`p-1.5 rounded-md transition-all ${viewMode === 'timeline' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-500' : 'text-slate-400 hover:text-slate-600'}`}
                     title="תצוגת ציר זמן"
                 >
                     <LayoutGrid size={18} />
+                </button>
+                <button
+                    onClick={() => setViewMode('heatmap')}
+                    className={`p-1.5 rounded-md transition-all ${viewMode === 'heatmap' ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-500' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="מפת חום שבועית"
+                >
+                    <Grid3x3 size={18} />
                 </button>
             </div>
         </div>
@@ -317,7 +413,9 @@ const SchedulesView: React.FC = () => {
         showDetail={isEditing}
         onCloseDetail={() => setIsEditing(false)}
         list={
-          viewMode === 'table' ? (
+          viewMode === 'heatmap' ? (
+            <HeatmapView />
+          ) : viewMode === 'table' ? (
             <div className="overflow-auto flex-1">
                 <table className="w-full text-right text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">

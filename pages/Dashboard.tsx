@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { apiService } from '../services/api';
@@ -31,6 +31,24 @@ const Dashboard: React.FC = () => {
     };
     loadData();
   }, []);
+
+  const distributionTypeHealth = useMemo(() => {
+    const typeColors: Record<string, string> = { Email: '#6366f1', SFTP: '#10b981', Kafka: '#f59e0b' };
+    const groups: Record<string, { total: number; active: number }> = {};
+    stats.distributions.forEach(d => {
+      const name = d.distributionType?.name ?? 'Unknown';
+      if (!groups[name]) groups[name] = { total: 0, active: 0 };
+      groups[name].total++;
+      if (d.isActive === 1) groups[name].active++;
+    });
+    return Object.entries(groups).map(([name, { total, active }]) => ({
+      name,
+      total,
+      active,
+      percent: total > 0 ? Math.round((active / total) * 100) : 0,
+      color: typeColors[name] ?? '#94a3b8',
+    }));
+  }, [stats.distributions]);
 
   if (loading) {
     return (
@@ -97,6 +115,59 @@ const Dashboard: React.FC = () => {
       );
     }
     return null;
+  };
+
+  interface HealthRingProps {
+    percent: number;
+    color: string;
+    label: string;
+    active: number;
+    total: number;
+    size?: number;
+    strokeWidth?: number;
+  }
+
+  const HealthRing: React.FC<HealthRingProps> = ({ percent, color, label, active, total, size = 52, strokeWidth = 5 }) => {
+    const radius = (size - strokeWidth * 2) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (percent / 100) * circumference;
+    const cx = size / 2;
+    const cy = size / 2;
+
+    return (
+      <div className="flex items-center gap-3">
+        <div className="relative shrink-0" style={{ width: size, height: size }}>
+          <svg width={size} height={size}>
+            <circle
+              cx={cx} cy={cy} r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={strokeWidth}
+              className="text-slate-100 dark:text-slate-700"
+            />
+            <motion.circle
+              cx={cx} cy={cy} r={radius}
+              fill="none"
+              stroke={color}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              initial={{ strokeDashoffset: circumference }}
+              animate={{ strokeDashoffset: offset }}
+              transition={{ duration: 1, delay: 0.3, ease: 'easeOut' }}
+              style={{ transformOrigin: 'center', transform: 'rotate(-90deg)' }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-[9px] font-bold text-slate-700 dark:text-slate-200">{percent}%</span>
+          </div>
+        </div>
+        <div className="flex flex-col leading-tight">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+          <span className="text-xs text-slate-400">{active}/{total} פעיל</span>
+        </div>
+      </div>
+    );
   };
 
   const containerVariants = {
@@ -243,8 +314,38 @@ const Dashboard: React.FC = () => {
           </motion.div>
         ))}
 
+        {/* Distribution Health Rings */}
+        <motion.div
+          variants={itemVariants}
+          className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col"
+        >
+          <div className="mb-4">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <Activity size={18} className="text-indigo-500" />
+              בריאות הפצות
+            </h3>
+            <p className="text-xs text-slate-400">סטטוס פעיל לפי סוג</p>
+          </div>
+          <div className="flex flex-col gap-4 flex-1 justify-center">
+            {distributionTypeHealth.length > 0 ? (
+              distributionTypeHealth.map(d => (
+                <HealthRing
+                  key={d.name}
+                  label={d.name}
+                  percent={d.percent}
+                  color={d.color}
+                  active={d.active}
+                  total={d.total}
+                />
+              ))
+            ) : (
+              <p className="text-sm text-slate-400 text-center">אין נתוני הפצה</p>
+            )}
+          </div>
+        </motion.div>
+
         {/* Pie Distribution - Medium (1x1) */}
-        <motion.div 
+        <motion.div
           variants={itemVariants}
           className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col"
         >
