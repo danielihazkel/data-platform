@@ -5,48 +5,6 @@ import { DistributionCollectorQuery, DistributionCollectorSystem, QueryTestResul
 import SplitView from '../components/ui/SplitView';
 import { StatusBadge } from '../components/ui/Badge';
 import { motion } from 'framer-motion';
-import { getQuerySparklineData } from '../services/sparklineUtils';
-
-interface SparklineProps {
-  data: number[];
-  color: string;
-  width?: number;
-  height?: number;
-}
-
-const Sparkline: React.FC<SparklineProps> = ({ data, color, width = 80, height = 28 }) => {
-  if (!data || data.length < 2) return null;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const pad = 2;
-  const w = width - pad * 2;
-  const h = height - pad * 2;
-
-  const points = data.map((v, i) => {
-    const x = pad + (i / (data.length - 1)) * w;
-    const y = pad + h - ((v - min) / range) * h;
-    return `${x},${y}`;
-  });
-  const polyline = points.join(' ');
-  const lastPoint = points[points.length - 1].split(',');
-
-  const areaPath = `M${points[0]} L${points.join(' L')} L${pad + w},${pad + h} L${pad},${pad + h} Z`;
-
-  return (
-    <svg width={width} height={height} dir="ltr" style={{ display: 'block' }}>
-      <defs>
-        <linearGradient id={`sg-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#sg-${color.replace('#', '')})`} />
-      <polyline points={polyline} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={lastPoint[0]} cy={lastPoint[1]} r="2.5" fill={color} />
-    </svg>
-  );
-};
 
 const QueriesView: React.FC = () => {
   const [queries, setQueries] = useState<DistributionCollectorQuery[]>([]);
@@ -115,12 +73,6 @@ const QueriesView: React.FC = () => {
       q.system?.name.toLowerCase().includes(term)
     );
   }, [queries, searchTerm]);
-
-  const sparklineDataMap = useMemo(() => {
-    const map: Record<string, number[]> = {};
-    filteredQueries.forEach(q => { map[q.id] = getQuerySparklineData(q.id); });
-    return map;
-  }, [filteredQueries]);
 
   const getUsageStats = (queryId: string) => {
     const relSchedules = schedules.filter(s => s.queryId === queryId);
@@ -429,7 +381,6 @@ const QueriesView: React.FC = () => {
                   <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">מזהה</th>
                   <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">שם</th>
                   <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">מערכת</th>
-                  <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">טרנד 14 יום</th>
                   <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">שימושים</th>
                   <th className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">סטטוס</th>
                 </tr>
@@ -452,12 +403,6 @@ const QueriesView: React.FC = () => {
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-400 flex items-center gap-2">
                             <Database size={14} className="text-slate-400"/>
                             {item.system?.name || '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <Sparkline
-                            data={sparklineDataMap[item.id] || []}
-                            color={item.isActive === 1 ? '#664FE1' : '#94a3b8'}
-                          />
                         </td>
                         <td className="px-6 py-4">
                            <div className="flex gap-2 items-center">
@@ -495,7 +440,7 @@ const QueriesView: React.FC = () => {
                 })}
                 {filteredQueries.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-400">
+                    <td colSpan={5} className="text-center py-12 text-slate-400">
                       לא נמצאו תוצאות
                     </td>
                   </tr>
