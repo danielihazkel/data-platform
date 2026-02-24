@@ -10,9 +10,11 @@ npm run dev          # Dev server at http://localhost:3000
 npm run build        # Production build to dist/
 npm run lint         # TypeScript type-check only (tsc --noEmit)
 npm run preview      # Preview production build
+npm run test         # Run Vitest in watch mode
+npm run test:run     # Run Vitest once (CI)
 ```
 
-There is no test runner configured in this project.
+Tests live in `*.test.ts` files alongside source. Currently covers `services/api.ts` (mock-mode branch).
 
 ## Environment
 
